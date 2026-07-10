@@ -1,4 +1,6 @@
 import streamlit as st
+import os
+import tempfile
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -26,15 +28,19 @@ Answer:"""
 
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-FAISS_DB_PATH="vectorstore/db_faiss"
+FAISS_DB_PATH = os.path.join(tempfile.gettempdir(), "db_faiss")
 
+# Use /tmp for uploads — writable on both local and Streamlit Cloud
+pdfs_directory = os.path.join(tempfile.gettempdir(), "pdfs") + os.sep
+os.makedirs(pdfs_directory, exist_ok=True)
 
-pdfs_directory = 'pdfs/'
-llm_model=ChatGroq(model="llama-3.3-70b-versatile")
+llm_model = ChatGroq(model="llama-3.3-70b-versatile")
 
 def upload_pdf(file):
-    with open(pdfs_directory + file.name, "wb") as f:
+    file_path = os.path.join(pdfs_directory, file.name)
+    with open(file_path, "wb") as f:
         f.write(file.getbuffer())
+    return file_path
 
 
 def load_pdf(file_path):
@@ -98,8 +104,8 @@ uploaded_file = st.file_uploader(
 
 # Build vector store when a PDF is uploaded
 if uploaded_file:
-    upload_pdf(uploaded_file)
-    documents = load_pdf(pdfs_directory + uploaded_file.name)
+    file_path = upload_pdf(uploaded_file)
+    documents = load_pdf(file_path)
     text_chunks = create_chunks(documents)
     st.session_state.faiss_db = create_vector_store(FAISS_DB_PATH, text_chunks)
     st.success(f"✅ PDF loaded: {uploaded_file.name}")
