@@ -12,13 +12,17 @@ from langchain_groq import ChatGroq
 
 
 custom_prompt_template = """
-Use the pieces of information provided in the context to answer user's question.
-If you dont know the answer, just say that you dont know, dont try to make up an answer. 
-Dont provide anything out of the given context
-Question: {question} 
-Context: {context} 
-Answer:
-"""
+You are a legal assistant. Use the context from the document to answer the user's question.
+If the answer is not in the context, say you don't know.
+
+Previous conversation:
+{chat_history}
+
+Document context:
+{context}
+
+Current question: {question}
+Answer:"""
 
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
@@ -68,11 +72,16 @@ def get_context(documents):
     return context
 
 
-def answer_query(documents, model, query):
+def answer_query(documents, model, query, chat_history=[]):
     context = get_context(documents)
+    # Format chat history as readable conversation
+    history_text = ""
+    for msg in chat_history[-6:]:  # Last 3 exchanges (6 messages)
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history_text += f"{role}: {msg['content']}\n"
     prompt = ChatPromptTemplate.from_template(custom_prompt_template)
     chain = prompt | model
-    return chain.invoke({"question": query, "context": context})
+    return chain.invoke({"question": query, "context": context, "chat_history": history_text})
 
 
 # --- Session state for chat history and FAISS DB ---
@@ -116,7 +125,7 @@ if user_query:
 
         # Get answer
         retrieved_docs = retrieve_docs(st.session_state.faiss_db, user_query)
-        response = answer_query(documents=retrieved_docs, model=llm_model, query=user_query)
+        response = answer_query(documents=retrieved_docs, model=llm_model, query=user_query, chat_history=st.session_state.chat_history)
         answer = response.content  # Extract plain text only
 
         # Show assistant reply
