@@ -26,7 +26,7 @@ FAISS_DB_PATH="vectorstore/db_faiss"
 
 
 pdfs_directory = 'pdfs/'
-llm_model=ChatGroq(model="deepseek-r1-distill-llama-70b")
+llm_model=ChatGroq(model="llama-3.3-70b-versatile")
 
 def upload_pdf(file):
     with open(pdfs_directory + file.name, "wb") as f:
