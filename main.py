@@ -75,31 +75,53 @@ def answer_query(documents, model, query):
     return chain.invoke({"question": query, "context": context})
 
 
+# --- Session state for chat history and FAISS DB ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "faiss_db" not in st.session_state:
+    st.session_state.faiss_db = None
+
 uploaded_file = st.file_uploader(
     "Upload PDF",
     type="pdf",
     accept_multiple_files=False
 )
 
+# Build vector store when a PDF is uploaded
+if uploaded_file:
+    upload_pdf(uploaded_file)
+    documents = load_pdf(pdfs_directory + uploaded_file.name)
+    text_chunks = create_chunks(documents)
+    st.session_state.faiss_db = create_vector_store(FAISS_DB_PATH, text_chunks)
+    st.success(f"✅ PDF loaded: {uploaded_file.name}")
 
-user_query = st.text_area("Enter your prompt: ", height=150 , placeholder= "Ask Anything!")
+st.divider()
 
-ask_question = st.button("Ask AI Lawyer")
+# Display full chat history
+for message in st.session_state.chat_history:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-if ask_question:
+# Chat input at the bottom
+user_query = st.chat_input("Ask the AI Lawyer...")
 
-    if uploaded_file and user_query:
-        upload_pdf(uploaded_file)
-        documents = load_pdf(pdfs_directory + uploaded_file.name)
-        text_chunks = create_chunks(documents)
-        faiss_db = create_vector_store(FAISS_DB_PATH, text_chunks)
-
-        retrieved_docs=retrieve_docs(faiss_db, user_query)
-        response=answer_query(documents=retrieved_docs, model=llm_model, query=user_query)
-
-        st.chat_message("user").write(user_query)
-        st.chat_message("AI Lawyer").write(response)
-
+if user_query:
+    if st.session_state.faiss_db is None:
+        st.error("Please upload a PDF first!")
     else:
-        st.error("Kindly upload a valid PDF file and/or ask a valid Question!")
+        # Show user message immediately
+        with st.chat_message("user"):
+            st.write(user_query)
+        st.session_state.chat_history.append({"role": "user", "content": user_query})
+
+        # Get answer
+        retrieved_docs = retrieve_docs(st.session_state.faiss_db, user_query)
+        response = answer_query(documents=retrieved_docs, model=llm_model, query=user_query)
+        answer = response.content  # Extract plain text only
+
+        # Show assistant reply
+        with st.chat_message("assistant"):
+            st.write(answer)
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+
 
